@@ -4,13 +4,15 @@ import tailwind from '@astrojs/tailwind';
 import icon from 'astro-icon';
 import { defineConfig, envField } from 'astro/config';
 
+import vercel from '@astrojs/vercel/serverless';
+
 // https://astro.build/config
 export default defineConfig({
 	integrations: [tailwind({ applyBaseStyles: false }), icon(), solidJs()],
 	// Update to your storefront URL
 	site: 'https://storefront-five-navy.vercel.app/',
 	output: 'server',
-	adapter: netlify({ imageCDN: true }),
+	adapter: vercel(),
 	vite: {
 		build: {
 			assetsInlineLimit(filePath) {

@@ -8,7 +8,7 @@ import { defineConfig, envField } from 'astro/config';
 export default defineConfig({
 	integrations: [tailwind({ applyBaseStyles: false }), icon(), solidJs()],
 	// Update to your storefront URL
-	site: 'https://shop.astro.build',
+	site: 'https://storefront-five-navy.vercel.app/',
 	output: 'server',
 	adapter: netlify({ imageCDN: true }),
 	vite: {

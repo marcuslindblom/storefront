@@ -18,6 +18,7 @@ applyDefaultCacheHeaders(Astro.response.headers);
 const id = unwrap(Astro.params.product, 'Product param not found');
 const productResponse = await getProductById({
 	path: { id },
+	baseUrl: Astro.url.pathname,
 });
 
 if (productResponse.error) {

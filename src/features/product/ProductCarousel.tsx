@@ -1,7 +1,8 @@
 import { RiArrowsArrowLeftLine, RiArrowsArrowRightLine } from 'solid-icons/ri';
-import { type ParentProps, createSignal } from 'solid-js';
+import { type ParentProps, createSignal, onMount } from 'solid-js';
 import { SquareIconButton } from '~/components/ui/Button.tsx';
 import { PageHeading, PageSection } from '~/components/ui/PageSection.tsx';
+import { subscribe } from '@strifeapp/strife';
 
 export const MEASURED_ITEM_ID = 'measured-li';
 export const GAP = 16; // gap-4
@@ -29,10 +30,19 @@ export default function ProductCarouselSection(
 		});
 	};
 
+	const [heading, setHeading] = createSignal(props.heading); // Create a reactive signal for heading
+
+	onMount(() => {
+		// This code runs on the client side when the component is mounted
+		return subscribe((data: any) => {
+			setHeading(data.heading);
+		});
+	});
+
 	return (
 		<PageSection aria-labelledby={HEADING_ID}>
 			<div class="flex items-center justify-between gap-2">
-				<PageHeading id={HEADING_ID}>{props.heading}</PageHeading>
+				<PageHeading id={HEADING_ID}>{heading()}</PageHeading>
 				<div class="flex gap-2">
 					<SquareIconButton onClick={() => scroll(-1)} disabled={scrollStatus() === 'start'}>
 						<RiArrowsArrowLeftLine />

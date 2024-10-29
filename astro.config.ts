@@ -1,4 +1,3 @@
-import netlify from '@astrojs/netlify';
 import solidJs from '@astrojs/solid-js';
 import tailwind from '@astrojs/tailwind';
 import icon from 'astro-icon';
@@ -19,6 +18,9 @@ export default defineConfig({
 				return filePath.endsWith('css');
 			},
 		},
+		ssr: {
+			noExternal: ['@strifeapp/strife'],
+		},
 	},
 	image: {
 		// Update to your own image domains
@@ -36,7 +38,8 @@ export default defineConfig({
 					context: 'server',
 					access: 'secret',
 					// This is a random test key
-					default: 'sk_test_4eC39HqLyjWDarjtT1zdp7dc',
+					default:
+						'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',
 				}),
 				FATHOM_SITE_ID: envField.string({
 					context: 'client',

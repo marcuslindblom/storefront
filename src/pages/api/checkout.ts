@@ -18,7 +18,7 @@ export const POST: APIRoute = async (context) => {
 
 	const stripe = new Stripe(STRIPE_SECRET_KEY);
 
-	const countrySpecs = await stripe.countrySpecs.retrieve('US');
+	const countrySpecs = await stripe.countrySpecs.retrieve('SE');
 
 	const session = await stripe.checkout.sessions.create({
 		mode: 'payment',

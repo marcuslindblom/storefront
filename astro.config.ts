@@ -39,7 +39,7 @@ export default defineConfig({
 					access: 'secret',
 					// This is a random test key
 					default:
-						'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',
+						'sk_test_51QBbzCKFlMCeKKbVTplO5C6zCO0qjXwjnBlLUScVeapmfyzlkCFVjKYqbTk9UpvHMZtjvHlrs0LxWtEn3ijD4Hxr00ASkbQaJ3',
 				}),
 				FATHOM_SITE_ID: envField.string({
 					context: 'client',
@@ -90,10 +90,12 @@ export default defineConfig({
 				US_SHIPPING_RATE_ID: envField.string({
 					context: 'server',
 					access: 'secret',
+					optional: true,
 				}),
 				INTERNATIONAL_SHIPPING_RATE_ID: envField.string({
 					context: 'server',
 					access: 'secret',
+					optional: true,
 				}),
 			},
 		},

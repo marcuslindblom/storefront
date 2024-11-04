@@ -1,7 +1,6 @@
 // This file contains mock functions for all storefront services.
 // You can use this as a template to connect your own ecommerce provider.
 
-import store from '~/store/index.ts';
 import type { Options, RequestResult } from '@hey-api/client-fetch';
 import type {
 	Collection,
@@ -29,57 +28,49 @@ import type {
 	Order,
 	Product,
 } from './client.types.ts';
+import store from '~/store/index.ts';
 
 export * from './client.types.ts';
 
 export const getProducts = async <ThrowOnError extends boolean = false>(
 	options?: Options<GetProductsData, ThrowOnError>,
 ): Promise<RequestResult<GetProductsResponse, GetProductsError, ThrowOnError>> => {
+	const session = store.openSession();
+
 	try {
-		const session = store.openSession();
 		let query = session.query<Product>({ collection: 'Products' });
 
+		// Apply filters
 		if (options?.query?.collectionId) {
-			const collectionId = options.query.collectionId;
-			query = query.whereEquals('collectionIds', collectionId); // Filter by collectionId
+			query = query.whereEquals('collectionIds', options.query.collectionId);
 		}
+
 		if (options?.query?.ids) {
 			const ids = Array.isArray(options.query.ids) ? options.query.ids : [options.query.ids];
-			query = query.whereIn('id()', ids); // Use 'id()' to filter by document ID in RavenDB
+			query = query.whereIn('id', ids);
 		}
+
+		// Apply sorting
 		if (options?.query?.sort && options?.query?.order) {
 			const { sort, order } = options.query;
 			if (sort === 'price') {
-				query = order === 'asc' ? query.orderBy('price') : query.orderByDescending('price'); // Sort by price
+				query = order === 'asc' ? query.orderBy('price') : query.orderByDescending('price');
 			} else if (sort === 'name') {
-				query = order === 'asc' ? query.orderBy('name') : query.orderByDescending('name'); // Sort by name
+				query = order === 'asc' ? query.orderBy('name') : query.orderByDescending('name');
 			}
 		}
 
 		const items = await query.all();
-		const data: GetProductsResponse = { items, next: null };
 
-		// Convert to unknown first, then cast to RequestResult
-		return {
-			data,
-			error: undefined,
-			request: new Request('https://example.com'),
-			response: new Response(),
-		} as unknown as RequestResult<GetProductsResponse, GetProductsError, ThrowOnError>;
-	} catch (error) {
-		// Since ThrowOnError is a type, use options?.throwOnError as a runtime flag
-		const throwOnError: boolean = options?.throwOnError ?? false;
-		if (throwOnError) {
-			throw error;
-		}
+		// Remove @metadata from each item
+		const cleanItems = items.map((item) => {
+			const { '@metadata': _, ...cleanItem } = item;
+			return cleanItem as Product;
+		});
 
-		// Convert to unknown first, then cast to RequestResult
-		return {
-			data: undefined,
-			error: error as GetProductsError,
-			request: new Request('https://example.com'),
-			response: new Response(),
-		} as unknown as RequestResult<GetProductsResponse, GetProductsError, ThrowOnError>;
+		return asResult({ items: cleanItems, next: null });
+	} finally {
+		session.dispose();
 	}
 };
 
@@ -87,23 +78,22 @@ export const getProductById = async <ThrowOnError extends boolean = false>(
 	options: Options<GetProductByIdData, ThrowOnError>,
 ): Promise<RequestResult<GetProductByIdResponse, GetProductByIdError, ThrowOnError>> => {
 	const session = store.openSession();
+
 	try {
 		const product = await session.load<Product>(options.path.id);
-		const { '@metadata': _, ...cleanedData } = product;
-		if (cleanedData) {
-			return asResult(cleanedData) as RequestResult<
-				GetProductByIdResponse,
-				GetProductByIdError,
-				ThrowOnError
-			>;
+
+		if (!product) {
+			const error = asError<GetProductByIdError>({ error: 'not-found' });
+			if (options.throwOnError) throw error;
+			return error as RequestResult<GetProductByIdResponse, GetProductByIdError, ThrowOnError>;
 		}
-		const error = asError<GetProductByIdError>({ error: 'not-found' });
-		if (options.throwOnError) throw error;
-		return error as RequestResult<GetProductByIdResponse, GetProductByIdError, ThrowOnError>;
-	} catch (err) {
-		const error = asError<GetProductByIdError>({ error: 'unexpected-error' });
-		if (options.throwOnError) throw error;
-		return error as RequestResult<GetProductByIdResponse, GetProductByIdError, ThrowOnError>;
+
+		// Remove @metadata from the product
+		const { '@metadata': _, ...cleanProduct } = product;
+
+		return asResult(cleanProduct);
+	} finally {
+		session.dispose();
 	}
 };
 
@@ -150,7 +140,8 @@ export const createOrder = <ThrowOnError extends boolean = false>(
 		number: 1001,
 		lineItems: options.body.lineItems.map((lineItem) => ({
 			...lineItem,
-			id: `line-item-${lineItem.productId}`,
+			id: crypto.randomUUID(),
+			productVariant: getProductVariantFromLineItemInput(lineItem.productVariantId),
 		})),
 		billingAddress: getAddress(options.body.billingAddress),
 		shippingAddress: getAddress(options.body.shippingAddress),
@@ -207,132 +198,115 @@ const collections: Record<string, Collection> = {
 	},
 };
 
-/* const shirtVariations = [
-	{
-		id: 'color',
-		name: 'Color',
-		options: [
-			{ id: 'grey', name: 'Grey', caption: 'Grey' },
-			{ id: 'black', name: 'Black', caption: 'Black' },
-			{ id: 'red', name: 'Red', caption: 'Red' },
-			{ id: 'blue', name: 'Blue', caption: 'Blue' },
-		],
-	},
-	{
-		id: 'size',
-		name: 'Size',
-		options: [
-			{ id: 'xs', name: 'XS', caption: 'XS' },
-			{ id: 's', name: 'S', caption: 'S' },
-			{ id: 'm', name: 'M', caption: 'M' },
-			{ id: 'l', name: 'L', caption: 'L' },
-			{ id: 'xl', name: 'XL', caption: 'XL' },
-			{ id: 'xxl', name: 'XXL', caption: 'XXL' },
-			{ id: 'xxxl', name: 'XXXL', caption: 'XXXL' },
-		],
-	},
-]; */
+const defaultVariant = {
+	id: 'default',
+	name: 'Default',
+	stock: 20,
+	options: {},
+};
 
-/* const productDefaults = {
+const apparelVariants = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'].map((size, index) => ({
+	id: size,
+	name: size,
+	stock: index * 10,
+	options: {
+		Size: size,
+	},
+}));
+
+const productDefaults = {
 	description: '',
 	images: [],
+	variants: [defaultVariant],
 	discount: 0,
 	createdAt: new Date().toISOString(),
 	updatedAt: new Date().toISOString(),
 	deletedAt: null,
-}; */
+};
 
-/* const products: Record<string, Product> = {
+const products: Record<string, Product> = {
 	'astro-icon-zip-up-hoodie': {
+		...productDefaults,
 		id: 'astro-icon-zip-up-hoodie',
 		name: 'Astro Icon Zip Up Hoodie',
 		slug: 'astro-icon-zip-up-hoodie',
 		tagline:
 			'No need to compress this .zip. The Zip Up Hoodie is a comfortable fit and fabric for all sizes.',
-		stock: 50,
 		price: 4500,
 		imageUrl: '/assets/astro-zip-up-hoodie.png',
-		variations: shirtVariations,
 		collectionIds: ['apparel', 'bestSellers'],
-		...productDefaults,
+		variants: apparelVariants,
 	},
 	'astro-logo-curve-bill-snapback-cap': {
+		...productDefaults,
 		id: 'astro-logo-curve-bill-snapback-cap',
 		name: 'Astro Logo Curve Bill Snapback Cap',
 		slug: 'astro-logo-curve-bill-snapback-cap',
 		tagline: 'The best hat for any occasion, no cap.',
-		stock: 50,
 		price: 2500,
 		imageUrl: '/assets/astro-cap.png',
 		collectionIds: ['apparel'],
-		...productDefaults,
 	},
 	'astro-sticker-sheet': {
+		...productDefaults,
 		id: 'astro-sticker-sheet',
 		name: 'Astro Sticker Sheet',
 		slug: 'astro-sticker-sheet',
 		tagline: "You probably want this for the fail whale sticker, don't you?",
-		stock: 50,
 		price: 1000,
 		imageUrl: '/assets/astro-universe-stickers.png',
 		collectionIds: ['stickers'],
-		...productDefaults,
 	},
 	'sticker-pack': {
+		...productDefaults,
 		id: 'sticker-pack',
 		name: 'Sticker Pack',
 		slug: 'sticker-pack',
 		tagline: 'Jam packed with the most popular stickers.',
-		stock: 50,
 		price: 500,
 		imageUrl: '/assets/astro-sticker-pack.png',
 		collectionIds: ['stickers', 'bestSellers'],
-		...productDefaults,
 	},
 	'astro-icon-unisex-shirt': {
+		...productDefaults,
 		id: 'astro-icon-unisex-shirt',
 		name: 'Astro Icon Unisex Shirt',
 		slug: 'astro-icon-unisex-shirt',
 		tagline: 'A comfy Tee with the classic Astro logo.',
-		stock: 50,
 		price: 1775,
 		imageUrl: '/assets/astro-unisex-tshirt.png',
-		variations: shirtVariations,
 		collectionIds: ['apparel'],
-		...productDefaults,
+		variants: apparelVariants,
 	},
 	'astro-icon-gradient-sticker': {
+		...productDefaults,
 		id: 'astro-icon-gradient-sticker',
 		name: 'Astro Icon Gradient Sticker',
 		slug: 'astro-icon-gradient-sticker',
 		tagline: "There gradi-ain't a better sticker than the classic Astro logo.",
-		stock: 50,
 		price: 200,
 		imageUrl: '/assets/astro-icon-sticker.png',
 		collectionIds: ['stickers', 'bestSellers'],
-		...productDefaults,
 	},
 	'astro-logo-beanie': {
+		...productDefaults,
 		id: 'astro-logo-beanie',
 		name: 'Astro Logo Beanie',
 		slug: 'astro-logo-beanie',
 		tagline: "There's never Bean a better hat for the winter season.",
-		stock: 50,
 		price: 1800,
 		imageUrl: '/assets/astro-beanie.png',
 		collectionIds: ['apparel', 'bestSellers'],
-		...productDefaults,
 	},
 	'lighthouse-100-sticker': {
+		...productDefaults,
 		id: 'lighthouse-100-sticker',
 		name: 'Lighthouse 100 Sticker',
 		slug: 'lighthouse-100-sticker',
 		tagline: 'Bad performance? Not in my (light) house.',
-		stock: 50,
 		price: 500,
 		imageUrl: '/assets/astro-lighthouse-sticker.png',
 		collectionIds: ['stickers'],
-		...productDefaults,
 	},
 	'houston-sticker': {
 		...productDefaults,
@@ -340,13 +314,12 @@ const collections: Record<string, Collection> = {
 		name: 'Houston Sticker',
 		slug: 'houston-sticker',
 		tagline: 'You can fit a Hous-ton of these on any laptop lid.',
-		stock: 50,
 		price: 250,
 		discount: 100,
 		imageUrl: '/assets/astro-houston-sticker.png',
 		collectionIds: ['stickers', 'bestSellers'],
 	},
-}; */
+};
 
 function asResult<T>(data: T) {
 	return Promise.resolve({
@@ -379,4 +352,17 @@ function getAddress(address: Required<CreateOrderData>['body']['shippingAddress'
 		firstName: address?.firstName ?? null,
 		lastName: address?.lastName ?? null,
 	};
+}
+
+function getProductVariantFromLineItemInput(
+	variantId: string,
+): NonNullable<Order['lineItems']>[number]['productVariant'] {
+	for (const product of Object.values(products)) {
+		for (const variant of product.variants) {
+			if (variant.id === variantId) {
+				return { ...variant, product };
+			}
+		}
+	}
+	throw new Error(`Product variant ${variantId} not found`);
 }

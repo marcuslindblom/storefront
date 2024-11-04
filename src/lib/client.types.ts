@@ -30,6 +30,7 @@ export type Product = {
 		};
 		stock: number;
 	}>;
+	'@metadata'?: unknown;
 };
 
 export type Collection = {

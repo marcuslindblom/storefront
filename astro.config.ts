@@ -29,6 +29,7 @@ export default defineConfig({
 			'shop-next.astro.build',
 			'shop.astro.build',
 			'main--astro-swag-shop.netlify.app',
+			'storefront-five-navy.vercel.app',
 		],
 	},
 	experimental: {
